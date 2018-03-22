@@ -57,7 +57,9 @@ The usage is:
 char2mozzi.py infilename outfilename tablename samplerate
 */
 //template <unsigned int NUM_TABLE_CELLS, unsigned int UPDATE_RATE, bool DITHER_PHASE=false>
-template <uint16_t NUM_TABLE_CELLS, uint16_t UPDATE_RATE>
+// default type is for small 8-bit tables for backwards compatibility
+
+template < uint16_t NUM_TABLE_CELLS, uint16_t UPDATE_RATE,typename T = const int8_t>
 class Oscil
 {
 
@@ -68,7 +70,7 @@ public:
 	can be found in the table ".h" file if you are using a table made for
 	Mozzi by the int8_t2mozzi.py python script in Mozzi's python
 	folder.*/
-	Oscil(const int8_t * TABLE_NAME):table(TABLE_NAME)
+	Oscil(T * TABLE_NAME):table(TABLE_NAME)
 	{}
 
 
@@ -86,7 +88,7 @@ public:
 	@return the next sample.
 	*/
 	inline
-	int8_t next()
+	T next()
 	{
 		incrementPhase();
 		return readTable();
@@ -96,7 +98,7 @@ public:
 	/** Change the sound table which will be played by the Oscil.
 	@param TABLE_NAME is the name of the array in the table ".h" file you're using.
 	*/
-	void setTable(const int8_t * TABLE_NAME)
+	void setTable(T * TABLE_NAME)
 	{
 		table = TABLE_NAME;
 	}
@@ -108,9 +110,9 @@ public:
 	// This could be called in the control interrupt, so phase_fractional should really be volatile,
 	// but that could limit optimisation.  Since phase_fractional gets changed often in updateAudio()
 	// (in loop()), it's probably worth keeping it nonvolatile until it causes problems
-	void setPhase(unsigned int phase)
+	void setPhase(uint16_t phase)
 	{
-		phase_fractional = (unsigned long)phase << OSCIL_F_BITS;
+		phase_fractional = (uint32_t)phase << OSCIL_F_BITS;
 	}
 
 	/** Set the phase of the Oscil.  Might be useful with getPhaseFractional().
@@ -119,7 +121,7 @@ public:
 	// This could be called in the control interrupt, so phase_fractional should really be volatile,
 	// but that could limit optimisation.  Since phase_fractional gets changed often in updateAudio()
 	// (in loop()), it's probably worth keeping it nonvolatile until it causes problems
-	void setPhaseFractional(unsigned long phase)
+	void setPhaseFractional(uint32_t phase)
 	{
 		phase_fractional = phase;
 	}
@@ -128,7 +130,7 @@ public:
 	/** Get the phase of the Oscil in fractional format.
 	@return position in the wavetable, shifted left by OSCIL_F_BITS (which is 16 when this was written).
 	*/
-	unsigned long getPhaseFractional()
+	uint32_t getPhaseFractional()
 	{
 		return phase_fractional;
 	}
@@ -146,10 +148,10 @@ public:
 	// FM: cos(angle += (incr + change))
 	// The ratio of deviation to modulation frequency is called the "index of modulation". ( I = d / Fm )
 	inline
-	int8_t phMod(Q15n16 phmod_proportion)
+	T phMod(Q15n16 phmod_proportion)
 	{
 		incrementPhase();
-		return (int8_t)CONSTTABLE_READ(table + (((phase_fractional+(phmod_proportion * NUM_TABLE_CELLS))>>OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+		return FLASH_OR_RAM_READ<T>(table + (((phase_fractional+(phmod_proportion * NUM_TABLE_CELLS))>>OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
 	}
 
 
@@ -166,7 +168,7 @@ public:
 		// https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!msg/mozzi-users/u4D5NMzVnQs/pCmiWInFvrkJ
 		//phase_increment_fractional = ((((unsigned long)NUM_TABLE_CELLS<<ADJUST_FOR_NUM_TABLE_CELLS)*frequency)/UPDATE_RATE) << (OSCIL_F_BITS - ADJUST_FOR_NUM_TABLE_CELLS);
 		// to this:
-		phase_increment_fractional = ((unsigned long)frequency) * ((OSCIL_F_BITS_AS_MULTIPLIER*NUM_TABLE_CELLS)/UPDATE_RATE);
+		phase_increment_fractional = ((uint32_t)frequency) * ((OSCIL_F_BITS_AS_MULTIPLIER*NUM_TABLE_CELLS)/UPDATE_RATE);
 	}
 
 
@@ -178,7 +180,7 @@ public:
 	inline
 	void setFreq(float frequency)
 	{ // 1 us - using float doesn't seem to incur measurable overhead with the oscilloscope
-		phase_increment_fractional = (unsigned long)((((float)NUM_TABLE_CELLS * frequency)/UPDATE_RATE) * OSCIL_F_BITS_AS_MULTIPLIER);
+		phase_increment_fractional = (uint32_t)((((float)NUM_TABLE_CELLS * frequency)/UPDATE_RATE) * OSCIL_F_BITS_AS_MULTIPLIER);
 	}
 
 
@@ -200,9 +202,9 @@ public:
 		// TB2014-8-20 change this following Austin Grossman's suggestion on user list
 		// https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!msg/mozzi-users/u4D5NMzVnQs/pCmiWInFvrkJ
 		if ((256UL*NUM_TABLE_CELLS) >= UPDATE_RATE) {
-			phase_increment_fractional = ((unsigned long)frequency) * ((256UL*NUM_TABLE_CELLS)/UPDATE_RATE);
+			phase_increment_fractional = ((uint32_t)frequency) * ((256UL*NUM_TABLE_CELLS)/UPDATE_RATE);
 		} else {
-			phase_increment_fractional = ((unsigned long)frequency) / (UPDATE_RATE/(256UL*NUM_TABLE_CELLS));
+			phase_increment_fractional = ((uint32_t)frequency) / (UPDATE_RATE/(256UL*NUM_TABLE_CELLS));
 		}
 	}
 
@@ -224,9 +226,9 @@ public:
 		//phase_increment_fractional = (((((uint32_t)NUM_TABLE_CELLS<<ADJUST_FOR_NUM_TABLE_CELLS)>>7)*frequency)/(UPDATE_RATE>>6))
 		//                             << (OSCIL_F_BITS - ADJUST_FOR_NUM_TABLE_CELLS - 16 + 1);
 		if (NUM_TABLE_CELLS >= UPDATE_RATE) {
-			phase_increment_fractional = ((unsigned long)frequency) * (NUM_TABLE_CELLS/UPDATE_RATE);
+			phase_increment_fractional = ((uint32_t)frequency) * (NUM_TABLE_CELLS/UPDATE_RATE);
 		} else {
-			phase_increment_fractional = ((unsigned long)frequency) / (UPDATE_RATE/NUM_TABLE_CELLS);
+			phase_increment_fractional = ((uint32_t)frequency) / (UPDATE_RATE/NUM_TABLE_CELLS);
 		}
 	}
 /*
@@ -241,9 +243,9 @@ public:
 	@return the sample at the given table index.
 	*/
 	inline
-	int8_t atIndex(unsigned int index)
+	T atIndex(uint32_t index)
 	{
-		return (int8_t)CONSTTABLE_READ(table + (index & (NUM_TABLE_CELLS - 1)));
+		return FLASH_OR_RAM_READ<T>(table + (index & (NUM_TABLE_CELLS - 1)));
 	}
 
 
@@ -258,7 +260,7 @@ public:
 	@return the phase increment value which will produce a given frequency.
 	*/
 	inline
-	unsigned long phaseIncFromFreq(int frequency)
+	uint32_t phaseIncFromFreq(int32_t frequency)
 	{
 		// TB2014-8-20 change this following Austin Grossman's suggestion on user list
 		// https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!msg/mozzi-users/u4D5NMzVnQs/pCmiWInFvrkJ
@@ -271,7 +273,7 @@ public:
 	@param phaseinc_fractional a phase increment value as calculated by phaseIncFromFreq().
 	 */
 	inline
-	void setPhaseInc(unsigned long phaseinc_fractional)
+	void setPhaseInc(uint32_t phaseinc_fractional)
 	{
 		phase_increment_fractional = phaseinc_fractional;
 	}
@@ -299,20 +301,20 @@ static const uint8_t ADJUST_FOR_NUM_TABLE_CELLS = (NUM_TABLE_CELLS<2048) ? 8 : 0
 	/** Returns the current sample.
 	 */
 	inline
-	int8_t readTable()
+	T readTable()
 	{
 #ifdef OSCIL_DITHER_PHASE
-		return (int8_t)CONSTTABLE_READ(table + (((phase_fractional + ((int)(xorshift96()>>16))) >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+		return FLASH_OR_RAM_READ<T>(table + (((phase_fractional + ((int16_t)(xorshift96()>>16))) >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
 #else
-		return (int8_t)CONSTTABLE_READ(table + ((phase_fractional >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
-		//return (int8_t)CONSTTABLE_READ(table + (((phase_fractional >> OSCIL_F_BITS) | 1 ) & (NUM_TABLE_CELLS - 1))); odd phase, attempt to reduce frequency spurs in output
+		return FLASH_OR_RAM_READ<T>(table + ((phase_fractional >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+		//return FLASH_OR_RAM_READ<T>(table + (((phase_fractional >> OSCIL_F_BITS) | 1 ) & (NUM_TABLE_CELLS - 1))); odd phase, attempt to reduce frequency spurs in output
 #endif
 	}
 
 
 	unsigned long phase_fractional;
 	unsigned long phase_increment_fractional;
-	const int8_t * table;
+    T * table;
 
 };
 

@@ -21,6 +21,7 @@
 #endif
 #include "MozziGuts.h"
 #include "mozzi_fixmath.h"
+#include "mozzi_pgmspace.h"
 
 #ifdef OSCIL_DITHER_PHASE
 #include "mozzi_rand.h"
@@ -151,7 +152,8 @@ public:
 	T phMod(Q15n16 phmod_proportion)
 	{
 		incrementPhase();
-		return FLASH_OR_RAM_READ<T>(table + (((phase_fractional+(phmod_proportion * NUM_TABLE_CELLS))>>OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+
+		return FLASH_OR_RAM_READ<const int8_t>(table + (((phase_fractional+(phmod_proportion * NUM_TABLE_CELLS))>>OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
 	}
 
 
@@ -245,7 +247,7 @@ public:
 	inline
 	T atIndex(uint32_t index)
 	{
-		return FLASH_OR_RAM_READ<T>(table + (index & (NUM_TABLE_CELLS - 1)));
+		return FLASH_OR_RAM_READ<const int8_t>(table + (index & (NUM_TABLE_CELLS - 1)));
 	}
 
 
@@ -304,10 +306,10 @@ static const uint8_t ADJUST_FOR_NUM_TABLE_CELLS = (NUM_TABLE_CELLS<2048) ? 8 : 0
 	T readTable()
 	{
 #ifdef OSCIL_DITHER_PHASE
-		return FLASH_OR_RAM_READ<T>(table + (((phase_fractional + ((int16_t)(xorshift96()>>16))) >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+		return FLASH_OR_RAM_READ<const int8_t>(table + (((phase_fractional + ((int)(xorshift96()>>16))) >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
 #else
-		return FLASH_OR_RAM_READ<T>(table + ((phase_fractional >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
-		//return FLASH_OR_RAM_READ<T>(table + (((phase_fractional >> OSCIL_F_BITS) | 1 ) & (NUM_TABLE_CELLS - 1))); odd phase, attempt to reduce frequency spurs in output
+		return FLASH_OR_RAM_READ<const int8_t>(table + ((phase_fractional >> OSCIL_F_BITS) & (NUM_TABLE_CELLS - 1)));
+		//return FLASH_OR_RAM_READ<int8_t>(table + (((phase_fractional >> OSCIL_F_BITS) | 1 ) & (NUM_TABLE_CELLS - 1))); odd phase, attempt to reduce frequency spurs in output
 #endif
 	}
 
